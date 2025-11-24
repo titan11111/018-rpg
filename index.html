@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>買い物クエストDX</title>
+  <title>買い物クエストDX - 特別エリア版</title>
   <style>
     /* --- CSS設定 --- */
     * {
@@ -18,7 +18,6 @@
       color: #eee;
       margin: 0;
       padding: 5px;
-      /* ドット絵をくっきり表示 */
       image-rendering: pixelated; 
     }
 
@@ -62,6 +61,17 @@
       min-height: 24px;
     }
 
+    #area-display {
+      background: linear-gradient(45deg, #444, #666);
+      color: #fff;
+      padding: 3px 8px;
+      margin-bottom: 5px;
+      font-size: 11px;
+      font-weight: bold;
+      border-radius: 4px;
+      text-shadow: 1px 1px 0 #000;
+    }
+
     #screen-area {
       position: relative;
       width: 424px; 
@@ -91,11 +101,20 @@
       color: transparent;
     }
 
+    /* 通常タイル */
     .tile-empty { background-color: #7cba3f; }
     .tile-city  { background-color: #c2b280; border: 2px solid #5a3e19; }
     .tile-wall  { background-color: #555; }
     
-    /* マップ上の敵（シンボル）は汎用アイコンを使用 */
+    /* エリア別タイル */
+    .tile-witch-area { background-color: #4a148c; }
+    .tile-dragon-area { background-color: #b71c1c; }
+    .tile-poison-area { background-color: #2e7d32; }
+    .tile-slime-area { background-color: #0277bd; }
+    .tile-maou-area { background-color: #1a1a1a; }
+    .tile-minion-area { background-color: #424242; }
+    
+    /* エリア別の敵 */
     .tile-enemy { 
       background-color: #7cba3f;
       position: relative;
@@ -109,7 +128,29 @@
       filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.5));
     }
 
-    /* プレイヤーアイコン */
+    .tile-witch-enemy::after { content: '🧙‍♀️'; }
+    .tile-dragon-enemy::after { content: '🐉'; }
+    .tile-poison-enemy::after { content: '☠️'; }
+    .tile-slime-enemy::after { content: '🟢'; }
+    .tile-maou-enemy::after { content: '👹'; }
+    .tile-minion-enemy::after { content: '😈'; }
+
+    /* 特別な建物 */
+    .tile-special-building {
+      position: relative;
+      background: radial-gradient(circle, #ffd700, #ff6b00);
+      border: 3px solid #ff0000;
+    }
+    .tile-special-building::after {
+      font-size: 35px;
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .tile-witch-house::after { content: '🏚️'; }
+    .tile-dragon-nest::after { content: '🏔️'; }
+    .tile-maou-castle::after { content: '🏰'; }
+
     .player-marker {
       position: absolute;
       top: 180px;
@@ -163,14 +204,13 @@
       padding: 5px;
     }
 
-    /* 戦闘画面の敵画像スタイル */
     .enemy-img {
       width: 200px;
       height: 200px;
-      object-fit: contain; /* アスペクト比を維持 */
+      object-fit: contain;
       margin: 10px auto;
       filter: drop-shadow(4px 4px 6px rgba(0,0,0,0.7));
-      image-rendering: pixelated; /* ドット絵を綺麗に */
+      image-rendering: pixelated;
     }
 
     #battle-log-container {
@@ -269,11 +309,13 @@
 </head>
 <body>
   <div id="game-container">
-    <h1>買い物クエスト DX</h1>
+    <h1>買い物クエスト DX - 特別エリア版</h1>
     
     <div id="music-control">
       <button id="music-toggle">🔇 音楽OFF</button>
     </div>
+
+    <div id="area-display">現在地: 平原エリア</div>
 
     <div id="status-bar">
       <div id="gold-display">💰:0 G</div>
@@ -349,7 +391,7 @@
       const currentShop = document.getElementById("current-shop");
       const battle = document.getElementById("battle");
       const battleLog = document.getElementById("battle-log");
-      const battleEnemyImg = document.getElementById("battle-enemy-img"); // 画像要素
+      const battleEnemyImg = document.getElementById("battle-enemy-img");
       const playerHPText = document.getElementById("player-hp");
       const enemyHPText = document.getElementById("enemy-hp");
       const goldDisplay = document.getElementById("gold-display");
@@ -359,17 +401,31 @@
       const magicMenu = document.getElementById("magic-menu");
       const itemMenu = document.getElementById("item-menu");
       const musicToggle = document.getElementById("music-toggle");
+      const areaDisplay = document.getElementById("area-display");
 
-      // --- 敵画像のリスト (アップロードされたファイル名に合わせました) ---
-      const enemyImages = [
-        "enemy7.jpg",  // 炎
-        "enemy8.jpg",  // カエル
-        "enemy9.jpg",  // ゴースト
-        "enemy10.jpg", // 爆弾
-        "maou.jpg"     // 魔王 (レア)
-      ];
+      // --- 敵画像のリスト ---
+      const enemyImages = {
+        normal: ["enemy7.jpg", "enemy8.jpg", "enemy9.jpg", "enemy10.jpg"],
+        witch: ["enemy9.jpg"], // ゴースト系
+        dragon: ["enemy7.jpg"], // 炎系
+        poison: ["enemy8.jpg"], // カエル系
+        slime: ["enemy8.jpg"],  // スライム
+        maou: ["maou.jpg"],     // 魔王
+        minion: ["enemy10.jpg"] // 爆弾系
+      };
 
-      // --- 🎵 音楽の設定 (ファイル名修正) ---
+      // --- エリア定義 ---
+      const areaNames = {
+        normal: "平原エリア",
+        witch: "魔女の森",
+        dragon: "ドラゴンの巣",
+        poison: "毒の沼",
+        slime: "スライムゾーン",
+        maou: "魔王の城",
+        minion: "魔王の部下エリア"
+      };
+
+      // --- 音楽の設定 ---
       const fieldBGM = new Audio("felde.mp3");
       const battleBGM = new Audio("batle.mp3");
       
@@ -385,7 +441,6 @@
         if (musicEnabled) {
           musicToggle.textContent = "🔊 音楽ON";
           musicToggle.style.background = "#4a4";
-          // 現在の状態に合わせて再生
           if (inBattle) {
             battleBGM.play().catch(e => console.log("再生エラー(Battle):", e));
           } else {
@@ -405,12 +460,14 @@
       const VIEW_RADIUS = Math.floor(VIEW_SIZE / 2);
 
       let mapData = [];
-      let cityData = {}; 
+      let areaData = [];
+      let cityData = {};
       let playerX = Math.floor(MAP_SIZE / 2);
       let playerY = Math.floor(MAP_SIZE / 2);
       
       let inTown = false;
       let inBattle = false;
+      let currentEnemy = null;
 
       let playerHP = 30;
       const maxHP = 30;
@@ -441,6 +498,29 @@
         magic: { name: "魔法屋", icon: "🔮", description: "不思議な魔法のアイテム!", items: [] }
       };
 
+      // --- エリア判定関数 ---
+      function getArea(x, y) {
+        // 左上: 魔女の家 (0-16, 0-16)
+        if (x < 17 && y < 17) return "witch";
+        
+        // 右上: ドラゴンの巣 (33-50, 0-10)
+        if (x >= 33 && y < 10) return "dragon";
+        
+        // 右上: 毒の沼 (33-50, 10-17)
+        if (x >= 33 && y >= 10 && y < 17) return "poison";
+        
+        // 右中央: スライムゾーン (33-50, 17-33)
+        if (x >= 33 && y >= 17 && y < 33) return "slime";
+        
+        // 右下: 魔王の城 (40-50, 40-50)
+        if (x >= 40 && y >= 40) return "maou";
+        
+        // 右中下: 魔王の部下ゾーン (33-40, 33-40)
+        if (x >= 33 && x < 40 && y >= 33 && y < 40) return "minion";
+        
+        return "normal";
+      }
+
       // --- 初期化関数群 ---
       function setupShopItems() {
         shopTypes.weapon.items = [
@@ -469,37 +549,68 @@
 
       function generateMap() {
         mapData = [];
+        areaData = [];
         cityData = {};
-        let cityCount = 0;
         let legendaryShopPlaced = false;
 
         for (let y = 0; y < MAP_SIZE; y++) {
           let row = [];
+          let areaRow = [];
           for (let x = 0; x < MAP_SIZE; x++) {
+            const area = getArea(x, y);
+            areaRow.push(area);
+            
             let tile = 0;
-            if (Math.random() < 0.06) tile = 2; // 敵
-            if (Math.random() < 0.012) { // 街
-              tile = 1;
-              cityCount++;
+            
+            // 特別な建物の配置
+            if (area === "witch" && x === 8 && y === 8) {
+              tile = 100; // 魔女の家
+              cityData[`${x},${y}`] = "witch_house";
+            } else if (area === "dragon" && x === 41 && y === 5) {
+              tile = 101; // ドラゴンの巣
+              cityData[`${x},${y}`] = "dragon_nest";
+            } else if (area === "maou" && x === 45 && y === 45) {
+              tile = 102; // 魔王の城
+              cityData[`${x},${y}`] = "maou_castle";
+            } else {
+              // エリアごとの敵出現率
+              let enemyChance = 0.06;
+              let cityChance = 0.012;
               
-              const shopTypeKeys = Object.keys(shopTypes);
-              let shopType = shopTypeKeys[Math.floor(Math.random() * shopTypeKeys.length)];
+              if (area === "witch") enemyChance = 0.08;
+              else if (area === "dragon") enemyChance = 0.10;
+              else if (area === "poison") enemyChance = 0.12;
+              else if (area === "slime") enemyChance = 0.15;
+              else if (area === "minion") enemyChance = 0.14;
+              else if (area === "maou") enemyChance = 0.18;
               
-              if (cityCount === 10 && !legendaryShopPlaced) {
-                shopType = "legendary_weapon";
-                legendaryShopPlaced = true;
+              if (Math.random() < enemyChance) {
+                tile = 2; // 敵
+              } else if (Math.random() < cityChance) {
+                tile = 1; // 街
+                const shopTypeKeys = Object.keys(shopTypes);
+                let shopType = shopTypeKeys[Math.floor(Math.random() * shopTypeKeys.length)];
+                
+                if (!legendaryShopPlaced && Math.random() < 0.05) {
+                  shopType = "legendary_weapon";
+                  legendaryShopPlaced = true;
+                }
+                cityData[`${x},${y}`] = shopType;
               }
-              cityData[`${x},${y}`] = shopType;
             }
+            
             row.push(tile);
           }
           mapData.push(row);
+          areaData.push(areaRow);
         }
 
         // スタート地点周辺安全化
         for(let y=playerY-2; y<=playerY+2; y++){
           for(let x=playerX-2; x<=playerX+2; x++){
-            if(y>=0 && y<MAP_SIZE && x>=0 && x<MAP_SIZE) mapData[y][x] = 0;
+            if(y>=0 && y<MAP_SIZE && x>=0 && x<MAP_SIZE) {
+              if(mapData[y][x] === 2) mapData[y][x] = 0;
+            }
           }
         }
         
@@ -518,6 +629,8 @@
         goldDisplay.textContent = `💰:${gold} G`;
         weaponDisplay.textContent = `⚔️:${weapon}`;
         mpDisplay.textContent = `💧:${playerMP}`;
+        const currentArea = areaData[playerY][playerX];
+        areaDisplay.textContent = `現在地: ${areaNames[currentArea]}`;
       }
 
       function drawField() {
@@ -534,9 +647,31 @@
               cell.classList.add("tile-wall");
             } else {
               const tile = mapData[y][x];
-              if (tile === 1) cell.classList.add("tile-city");
-              else if (tile === 2) cell.classList.add("tile-enemy");
-              else cell.classList.add("tile-empty");
+              const area = areaData[y][x];
+              
+              // 特別な建物
+              if (tile === 100) {
+                cell.classList.add("tile-special-building", "tile-witch-house");
+              } else if (tile === 101) {
+                cell.classList.add("tile-special-building", "tile-dragon-nest");
+              } else if (tile === 102) {
+                cell.classList.add("tile-special-building", "tile-maou-castle");
+              } else if (tile === 1) {
+                cell.classList.add("tile-city");
+              } else if (tile === 2) {
+                // エリアごとの敵表示
+                cell.classList.add("tile-enemy", `tile-${area}-enemy`);
+                if (area !== "normal") {
+                  cell.classList.add(`tile-${area}-area`);
+                }
+              } else {
+                // 背景色をエリアごとに変更
+                if (area === "normal") {
+                  cell.classList.add("tile-empty");
+                } else {
+                  cell.classList.add(`tile-${area}-area`);
+                }
+              }
             }
             field.appendChild(cell);
           }
@@ -554,7 +689,79 @@
         const shopType = cityData[cityKey];
         currentShop.innerHTML = "";
 
-        if (shopType === "legendary_weapon") {
+        // 特別な建物
+        if (shopType === "witch_house") {
+          townName.textContent = "🧙‍♀️ 魔女の家";
+          shopIcon.textContent = "🏚️";
+          shopDescription.textContent = "呪われた品物が並んでいる…";
+          
+          const items = [
+            { name: "呪いの杖", price: 200, type: "info", desc: "使うと呪われる？" },
+            { name: "魔女の薬", price: 100, type: "item", desc: "謎の効果…" },
+            { name: "黒魔術の書", price: 500, type: "info", desc: "読めない文字が書いてある" }
+          ];
+          
+          items.forEach(item => {
+            const btn = document.createElement("button");
+            btn.className = "item-btn";
+            btn.style.background = "linear-gradient(45deg, #4a148c, #6a1b9a)";
+            btn.dataset.name = item.name;
+            btn.dataset.price = item.price;
+            btn.dataset.type = item.type;
+            btn.textContent = `${item.name} (${item.price}G) - ${item.desc}`;
+            btn.addEventListener("click", () => handlePurchase(item));
+            currentShop.appendChild(btn);
+          });
+          
+        } else if (shopType === "dragon_nest") {
+          townName.textContent = "🐉 ドラゴンの巣";
+          shopIcon.textContent = "🏔️";
+          shopDescription.textContent = "ドラゴンの宝物が眠る…";
+          
+          const items = [
+            { name: "竜の牙", price: 300, type: "info", desc: "伝説の素材" },
+            { name: "竜の鱗", price: 250, type: "info", desc: "硬い防具になりそう" },
+            { name: "伝説の剣", price: 500, type: "weapon", desc: "攻撃力+25", legendary: true }
+          ];
+          
+          items.forEach(item => {
+            const btn = document.createElement("button");
+            btn.className = "item-btn";
+            if (item.legendary) btn.classList.add("legendary-item");
+            else btn.style.background = "linear-gradient(45deg, #b71c1c, #d32f2f)";
+            btn.dataset.name = item.name;
+            btn.dataset.price = item.price;
+            btn.dataset.type = item.type;
+            btn.textContent = `${item.name} (${item.price}G) - ${item.desc}`;
+            btn.addEventListener("click", () => handlePurchase(item));
+            currentShop.appendChild(btn);
+          });
+          
+        } else if (shopType === "maou_castle") {
+          townName.textContent = "👹 魔王の城";
+          shopIcon.textContent = "🏰";
+          shopDescription.textContent = "ここが最後の戦いの場…";
+          
+          const items = [
+            { name: "勇者の証", price: 1000, type: "info", desc: "魔王を倒した証" },
+            { name: "最後の特効薬", price: 150, type: "item", desc: "HP全回復" },
+            { name: "魔王の玉座", price: 9999, type: "info", desc: "座れません" }
+          ];
+          
+          items.forEach(item => {
+            const btn = document.createElement("button");
+            btn.className = "item-btn";
+            btn.style.background = "linear-gradient(45deg, #1a1a1a, #424242)";
+            btn.style.color = "#ff0000";
+            btn.dataset.name = item.name;
+            btn.dataset.price = item.price;
+            btn.dataset.type = item.type;
+            btn.textContent = `${item.name} (${item.price}G) - ${item.desc}`;
+            btn.addEventListener("click", () => handlePurchase(item));
+            currentShop.appendChild(btn);
+          });
+          
+        } else if (shopType === "legendary_weapon") {
           townName.textContent = "✨ 伝説の武器屋 ✨";
           shopIcon.textContent = "👑";
           shopDescription.textContent = "伝説の武器を扱う特別な店!";
@@ -605,8 +812,23 @@
             weapon = item.name;
             showMessage(`${weapon}を装備した!`);
           } else if(item.type === "item"){
-            items[item.name] = (items[item.name] || 0) + 1;
-            showMessage(`${item.name}を手に入れた!`);
+            if(item.name === "最後の特効薬" || item.name === "特効薬") {
+              items["特効薬"] = (items["特効薬"] || 0) + 1;
+              showMessage(`特効薬を手に入れた!`);
+            } else if(item.name === "魔女の薬") {
+              // ランダム効果
+              if(Math.random() < 0.5) {
+                playerHP = Math.min(playerHP + 30, maxHP);
+                showMessage("魔女の薬で体力回復!");
+              } else {
+                playerHP = Math.max(1, playerHP - 10);
+                showMessage("魔女の薬で体力が減った…");
+              }
+              updateHP();
+            } else {
+              items[item.name] = (items[item.name] || 0) + 1;
+              showMessage(`${item.name}を手に入れた!`);
+            }
           } else if(item.type === "rest"){
             if(item.name === "休憩"){
               playerHP = Math.min(playerHP + 15, maxHP);
@@ -642,14 +864,17 @@
           playerX = newX;
           playerY = newY;
           drawField();
+          updateDisplays();
 
           const tile = mapData[newY][newX];
-          if (tile === 1) {
+          if (tile === 1 || tile >= 100) {
             inTown = true;
             town.classList.remove("hidden");
             openShop();
             showMessage("街についた!");
           } else if (tile === 2) {
+            const area = areaData[newY][newX];
+            currentEnemy = area;
             startBattle();
           }
         }
@@ -660,32 +885,45 @@
         inBattle = true;
         battle.classList.remove("hidden");
         
-        // BGM切り替え
         if (musicEnabled) {
           fieldBGM.pause();
           fieldBGM.currentTime = 0;
           battleBGM.play().catch(e => console.log("戦闘曲エラー:", e));
         }
         
-        // 敵の強さ
-        const enemyLevel = Math.floor(Math.random() * 5);
-        enemyHP = 15 + (enemyLevel * 8);
-
-        // ★敵画像のランダム選択★
-        // 魔王(maou.jpg)はレア(10%の確率)で出現、それ以外はランダム
-        let selectedImg;
-        if (Math.random() < 0.1) {
-            selectedImg = "maou.jpg";
-            enemyHP += 20; // 魔王は強い
-            battleLog.textContent = "魔王があらわれた!!!";
-        } else {
-            // enemy7,8,9,10 から選択
-            const normalEnemies = enemyImages.filter(img => img !== "maou.jpg");
-            selectedImg = normalEnemies[Math.floor(Math.random() * normalEnemies.length)];
-            battleLog.textContent = "魔物があらわれた!";
+        // エリアごとの敵の強さ
+        let baseHP = 15;
+        let enemyName = "魔物";
+        
+        if (currentEnemy === "witch") {
+          baseHP = 20;
+          enemyName = "魔女の手下";
+        } else if (currentEnemy === "dragon") {
+          baseHP = 35;
+          enemyName = "ドラゴン";
+        } else if (currentEnemy === "poison") {
+          baseHP = 25;
+          enemyName = "毒ガエル";
+        } else if (currentEnemy === "slime") {
+          baseHP = 18;
+          enemyName = "スライム";
+        } else if (currentEnemy === "minion") {
+          baseHP = 30;
+          enemyName = "魔王の部下";
+        } else if (currentEnemy === "maou") {
+          baseHP = 50;
+          enemyName = "魔王軍団";
         }
-        battleEnemyImg.src = selectedImg;
+        
+        const enemyLevel = Math.floor(Math.random() * 3);
+        enemyHP = baseHP + (enemyLevel * 5);
 
+        // エリアごとの敵画像選択
+        const imageList = enemyImages[currentEnemy] || enemyImages.normal;
+        const selectedImg = imageList[Math.floor(Math.random() * imageList.length)];
+        battleEnemyImg.src = selectedImg;
+        
+        battleLog.textContent = `${enemyName}があらわれた!`;
         updateHP();
         magicMenu.classList.add("hidden");
         itemMenu.classList.add("hidden");
@@ -698,7 +936,15 @@
 
       function enemyTurn() {
         if(!inBattle) return;
-        const damage = Math.floor(Math.random() * 6) + 3;
+        
+        // エリアごとの敵の攻撃力
+        let baseDamage = 3;
+        if (currentEnemy === "dragon") baseDamage = 8;
+        else if (currentEnemy === "poison") baseDamage = 5;
+        else if (currentEnemy === "minion") baseDamage = 6;
+        else if (currentEnemy === "maou") baseDamage = 10;
+        
+        const damage = Math.floor(Math.random() * 6) + baseDamage;
         playerHP -= damage;
         battleLog.textContent = `敵の攻撃!${damage}のダメージを受けた!`;
         updateHP();
@@ -728,7 +974,12 @@
             updateHP();
             checkWinOrTurn();
           } else if (cmd === "にげる") {
-            if(Math.random() < 0.6){
+            // エリアごとの逃走成功率
+            let escapeChance = 0.6;
+            if (currentEnemy === "dragon") escapeChance = 0.3;
+            else if (currentEnemy === "maou") escapeChance = 0.2;
+            
+            if(Math.random() < escapeChance){
                 battleLog.textContent = "うまくにげきれた!";
                 setTimeout(endBattle, 1000);
             } else {
@@ -745,11 +996,17 @@
 
       function checkWinOrTurn() {
         if (enemyHP <= 0) {
-          const earned = 20 + Math.floor(Math.random() * 30);
+          // エリアごとの報酬
+          let baseGold = 20;
+          if (currentEnemy === "dragon") baseGold = 50;
+          else if (currentEnemy === "maou") baseGold = 80;
+          else if (currentEnemy === "minion") baseGold = 40;
+          
+          const earned = baseGold + Math.floor(Math.random() * 30);
           gold += earned;
           updateDisplays();
           battleLog.textContent = `敵をたおした!${earned}G手に入れた!`;
-          mapData[playerY][playerX] = 0; // マップから敵シンボル消去
+          mapData[playerY][playerX] = 0;
           drawField();
           setTimeout(endBattle, 1500);
         } else {
@@ -760,6 +1017,7 @@
       function endBattle() {
         inBattle = false;
         battle.classList.add("hidden");
+        currentEnemy = null;
         
         if (musicEnabled) {
           battleBGM.pause();
